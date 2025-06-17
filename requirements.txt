@@ -1,1 +1,1 @@
-python-telegram-bot[wip]==21.0.1
+python-telegram-bot[webhooks]==21.0.1
