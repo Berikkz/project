@@ -10,20 +10,17 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
-import asyncio
 
 # Конфигурация
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")  # Токен из переменной окружения
-PRODUCTS_CHANNEL = "@ShopProducts"  # Канал для витрины
-ORDERS_CHANNEL = "@ShopOrders"  # Канал для заказов
-PRODUCTS_FILE = "products.json"  # Файл для товаров
-ADMINS_FILE = "admins.json"  # Файл для сотрудников
-# Состояния для ConversationHandler
+BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
+PRODUCTS_CHANNEL = "@ShopProducts"
+ORDERS_CHANNEL = "@ShopOrders"
+PRODUCTS_FILE = "products.json"
+ADMINS_FILE = "admins.json"
 PHOTO, DESCRIPTION, PRICE, EMPLOYEE_ID, EMPLOYEE_ROLE, DELETE_PRODUCT, DELETE_EMPLOYEE = range(7)
 
 # Валидация JSON
 def validate_products(products):
-    """Проверяем корректность products.json"""
     if not isinstance(products, list):
         return False
     required_fields = ["id", "name", "price", "description"]
@@ -39,7 +36,6 @@ def validate_products(products):
     return True
 
 def validate_admins(admins):
-    """Проверяем корректность admins.json"""
     if not isinstance(admins, dict) or "admins" not in admins:
         return False
     admins_list = admins["admins"]
@@ -57,7 +53,6 @@ def validate_admins(admins):
 
 # Работа с JSON
 def load_products():
-    """Загружаем товары"""
     try:
         with open(PRODUCTS_FILE, "r") as f:
             products = json.load(f)
@@ -72,18 +67,16 @@ def load_products():
         return products
 
 def save_products(products):
-    """Сохраняем товары"""
     with open(PRODUCTS_FILE, "w") as f:
         json.dump(products, f, indent=2)
 
 def load_admins():
-    """Загружаем админов"""
     try:
         with open(ADMINS_FILE, "r") as f:
             admins = json.load(f)
             if not validate_admins(admins):
                 print("Invalid admins.json, creating default")
-                admins = [{"user_id": 123456, "role": "admin", "permissions": ["all"]}]  # Замени на свой ID
+                admins = [{"user_id": 123456, "role": "admin", "permissions": ["all"]}]
                 save_admins(admins)
             return admins["admins"]
     except (FileNotFoundError, json.JSONDecodeError):
@@ -92,12 +85,10 @@ def load_admins():
         return admins
 
 def save_admins(admins):
-    """Сохраняем админов"""
     with open(ADMINS_FILE, "w") as f:
         json.dump({"admins": admins}, f, indent=2)
 
 async def send_json_files(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int):
-    """Отправляем JSON админу"""
     for file_path in [PRODUCTS_FILE, ADMINS_FILE]:
         if os.path.exists(file_path):
             with open(file_path, "rb") as f:
@@ -108,7 +99,6 @@ async def send_json_files(update: Update, context: ContextTypes.DEFAULT_TYPE, us
                 )
 
 async def sync_products_with_channel(context: ContextTypes.DEFAULT_TYPE):
-    """Синхронизируем products.json с @ShopProducts"""
     products = load_products()
     for product in products:
         if "message_id" not in product or not product["message_id"]:
@@ -135,7 +125,6 @@ async def sync_products_with_channel(context: ContextTypes.DEFAULT_TYPE):
 
 # Проверка прав
 def check_permission(user_id, required_permission):
-    """Проверяем права"""
     admins = load_admins()
     for admin in admins:
         if admin["user_id"] == user_id:
@@ -144,7 +133,6 @@ def check_permission(user_id, required_permission):
 
 # Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает 2 кнопки"""
     keyboard = [
         [InlineKeyboardButton("Заказ", callback_data="role_order")],
         [InlineKeyboardButton("Админ", callback_data="role_admin")]
@@ -154,7 +142,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Команда /upload_json
 async def upload_json(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Загрузка JSON от админа"""
     user_id = update.effective_user.id
     if not check_permission(user_id, "all"):
         await update.message.reply_text("Только админ может загружать JSON!")
@@ -191,20 +178,17 @@ async def upload_json(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Обработчик кнопок
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик инлайн-кнопок"""
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
     data = query.data
 
-    # Кнопка "Заказ"
     if data == "role_order":
         if not check_permission(user_id, "orders"):
             await query.message.reply_text("Нет доступа к заказам!")
             return
         await query.message.reply_text("Выберите заказ для обработки (в разработке).")
 
-    # Кнопка "Админ"
     elif data == "role_admin":
         if not check_permission(user_id, "all"):
             await query.message.reply_text("Только админ может управлять магазином!")
@@ -218,12 +202,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.message.reply_text("Меню админа:", reply_markup=reply_markup)
 
-    # Кнопка "Добавить товар"
     elif data == "add_product":
         await query.message.reply_text("Отправьте фото товара (или напишите 'без фото'):")
         return PHOTO
 
-    # Кнопка "Удалить товар"
     elif data == "delete_product":
         products = load_products()
         if not products:
@@ -234,12 +216,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("Выберите товар для удаления:", reply_markup=reply_markup)
         return DELETE_PRODUCT
 
-    # Кнопка "Добавить сотрудника"
     elif data == "add_employee":
         await query.message.reply_text("Введите Telegram ID или @username:")
         return EMPLOYEE_ID
 
-    # Кнопка "Удалить сотрудника"
     elif data == "remove_employee":
         admins = load_admins()
         if len(admins) <= 1:
@@ -250,7 +230,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("Выберите сотрудника для удаления:", reply_markup=reply_markup)
         return DELETE_EMPLOYEE
 
-    # Кнопка "Заказать"
     elif data.startswith("order_"):
         product_id = data.split("_")[1]
         products = load_products()
@@ -286,7 +265,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         await query.message.reply_text("Заказ оформлен! С вами свяжутся.")
 
-    # Кнопка "Взять в обработку"
     elif data.startswith("status_processing_"):
         order_id, message_id = data.split("_")[2], data.split("_")[3]
         if not check_permission(user_id, "orders"):
@@ -310,7 +288,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.message.reply_text(f"Заказ #{order_id} взят в обработку!")
 
-    # Кнопка "Отметить как продан"
     elif data.startswith("status_sold_"):
         order_id, message_id = data.split("_")[2], data.split("_")[3]
         if not check_permission(user_id, "orders"):
@@ -334,7 +311,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.message.reply_text(f"Заказ #{order_id} отмечен как продан!")
 
-    # Кнопка "Опубликовать"
     elif data.startswith("publish_"):
         product_id = data.split("_")[1]
         product = context.user_data.get("product")
@@ -367,7 +343,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("Товар опубликован в @ShopProducts!")
         context.user_data.clear()
 
-    # Кнопка "Удалить товар"
     elif data.startswith("del_product_"):
         product_id = data.split("_")[2]
         products = load_products()
@@ -384,7 +359,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_json_files(query, context, user_id)
         await query.message.reply_text(f"Товар {product['name']} удалён!")
 
-    # Кнопка "Удалить сотрудника"
     elif data.startswith("del_employee_"):
         employee_id = data.split("_")[2]
         admins = load_admins()
@@ -398,7 +372,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Обработчик добавления товара
 async def add_product_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик фото"""
     user_id = update.effective_user.id
     if not check_permission(user_id, "all"):
         await update.message.reply_text("Только админ может добавлять товары!")
@@ -414,13 +387,11 @@ async def add_product_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return DESCRIPTION
 
 async def add_product_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик описания"""
     context.user_data["description"] = update.message.text
     await update.message.reply_text("Введите цену товара (в рублях):")
     return PRICE
 
 async def add_product_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик цены"""
     try:
         price = float(update.message.text)
         context.user_data["price"] = price
@@ -464,7 +435,6 @@ async def add_product_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Обработчик добавления сотрудника
 async def add_employee_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик ID/username"""
     user_id = update.effective_user.id
     if not check_permission(user_id, "all"):
         await update.message.reply_text("Только админ может добавлять сотрудников!")
@@ -487,7 +457,6 @@ async def add_employee_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return EMPLOYEE_ROLE
 
 async def add_employee_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик роли"""
     query = update.callback_query
     await query.answer()
     role = "admin" if query.data == "role_admin_employee" else "seller"
@@ -500,15 +469,15 @@ async def add_employee_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.reply_text(f"Добавлен сотрудник {employee_id} с ролью {role}!")
     return ConversationHandler.END
 
-async def main():
+def main():
     """Запуск бота с вебхуком"""
-    app = Application.builder().token(BOT_TOKEN).build()
+    application = Application.builder().token(BOT_TOKEN).build()
 
     # Настройка хендлеров
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("upload_json", upload_json))
-    app.add_handler(CallbackQueryHandler(button, pattern="^(role_order|role_admin|add_product|delete_product|add_employee|remove_employee|order_|publish_|del_product_|del_employee_|status_processing_|status_sold_)"))
-    app.add_handler(CallbackQueryHandler(add_employee_role, pattern="^role_(admin|seller)_employee"))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("upload_json", upload_json))
+    application.add_handler(CallbackQueryHandler(button, pattern="^(role_order|role_admin|add_product|delete_product|add_employee|remove_employee|order_|publish_|del_product_|del_employee_|status_processing_|status_sold_)"))
+    application.add_handler(CallbackQueryHandler(add_employee_role, pattern="^role_(admin|seller)_employee"))
 
     product_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(button, pattern="^add_product$")],
@@ -519,7 +488,7 @@ async def main():
         },
         fallbacks=[],
     )
-    app.add_handler(product_conv)
+    application.add_handler(product_conv)
 
     employee_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(button, pattern="^add_employee$")],
@@ -529,7 +498,7 @@ async def main():
         },
         fallbacks=[],
     )
-    app.add_handler(employee_conv)
+    application.add_handler(employee_conv)
 
     delete_conv = ConversationHandler(
         entry_points=[
@@ -542,13 +511,12 @@ async def main():
         },
         fallbacks=[],
     )
-    app.add_handler(delete_conv)
+    application.add_handler(delete_conv)
 
     # Настройка вебхука
-    port = int(os.getenv("PORT", 8443))
+    port = int(os.getenv("PORT", 10000))
     webhook_url = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/webhook" if os.getenv("RENDER_EXTERNAL_HOSTNAME") else "https://your-render-url.onrender.com/webhook"
-    await app.bot.set_webhook(url=webhook_url)
-    await app.run_webhook(listen="0.0.0.0", port=port, url_path="/webhook", webhook_url=webhook_url)
+    application.run_webhook(listen="0.0.0.0", port=port, url_path="/webhook", webhook_url=webhook_url)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
