@@ -76,11 +76,11 @@ def load_admins():
             admins = json.load(f)
             if not validate_admins(admins):
                 print("Invalid admins.json, creating default")
-                admins = [{"user_id": 123456, "role": "admin", "permissions": ["all"]}]
+                admins = [{"user_id": @Grigorii_Ilonovich, "role": "admin", "permissions": ["all"]}]
                 save_admins(admins)
             return admins["admins"]
     except (FileNotFoundError, json.JSONDecodeError):
-        admins = [{"user_id": 123456, "role": "admin", "permissions": ["all"]}]
+        admins = [{"user_id": @Grigorii_Ilonovich, "role": "admin", "permissions": ["all"]}]
         save_admins(admins)
         return admins
 
