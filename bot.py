@@ -1,6 +1,5 @@
-# Импорты
-import json
 import os
+import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -11,11 +10,12 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+import asyncio
 
 # Конфигурация
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")  # Токен из .env или Render
-PRODUCTS_CHANNEL = "@ShopProductsgg"  # Канал для витрины
-ORDERS_CHANNEL = "@ShopOrdersgg"  # Канал для заказов
+BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")  # Токен из переменной окружения
+PRODUCTS_CHANNEL = "@ShopProducts"  # Канал для витрины
+ORDERS_CHANNEL = "@ShopOrders"  # Канал для заказов
 PRODUCTS_FILE = "products.json"  # Файл для товаров
 ADMINS_FILE = "admins.json"  # Файл для сотрудников
 # Состояния для ConversationHandler
@@ -500,12 +500,11 @@ async def add_employee_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.reply_text(f"Добавлен сотрудник {employee_id} с ролью {role}!")
     return ConversationHandler.END
 
-def main():
-    """Запуск бота"""
-    load_products()
-    load_admins()
+async def main():
+    """Запуск бота с вебхуком"""
     app = Application.builder().token(BOT_TOKEN).build()
 
+    # Настройка хендлеров
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("upload_json", upload_json))
     app.add_handler(CallbackQueryHandler(button, pattern="^(role_order|role_admin|add_product|delete_product|add_employee|remove_employee|order_|publish_|del_product_|del_employee_|status_processing_|status_sold_)"))
@@ -545,7 +544,11 @@ def main():
     )
     app.add_handler(delete_conv)
 
-    app.run_polling()
+    # Настройка вебхука
+    port = int(os.getenv("PORT", 8443))
+    webhook_url = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/webhook" if os.getenv("RENDER_EXTERNAL_HOSTNAME") else "https://your-render-url.onrender.com/webhook"
+    await app.bot.set_webhook(url=webhook_url)
+    await app.run_webhook(listen="0.0.0.0", port=port, url_path="/webhook", webhook_url=webhook_url)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
