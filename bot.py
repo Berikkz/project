@@ -21,7 +21,7 @@ def home():
     return "Бот живой!", 200
 
 def run():
-    app.run(host="0.0.0.0", port=8080
+    app.run(host="0.0.0.0", port=8080)
             
 def keep_alive():
     thread = threading.Thread(target=run)
