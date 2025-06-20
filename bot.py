@@ -9,9 +9,10 @@ from telegram.ext import (
     ConversationHandler,
     ContextTypes,
     filters,
+)
 from flask import Flask
 import threading
-)
+
 # Мини Flask-сервер (Uptime Robot)
 app = Flask(__name__)
 
