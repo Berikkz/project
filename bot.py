@@ -9,7 +9,22 @@ from telegram.ext import (
     ConversationHandler,
     ContextTypes,
     filters,
+from flask import Flask
+import threading
 )
+# Мини Flask-сервер (Uptime Robot)
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Бот живой!", 200
+
+def run():
+    app.run(host="0.0.0.0", port=8080
+            
+def keep_alive():
+    thread = threading.Thread(target=run)
+    thread.start()
 
 # Конфигурация
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
@@ -524,6 +539,8 @@ async def add_employee_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def main():
+    keep_alive()
+
     """Запуск бота с вебхуком"""
     application = Application.builder().token(BOT_TOKEN).build()
 
