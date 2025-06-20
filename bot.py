@@ -378,7 +378,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         products.append(product)
         save_products(products)
         await send_json_files(query, context, user_id)
-        await query.message.reply_text("Товар опубликован в @ShopProducts!")
+        await query.message.reply_text("Товар опубликован в @ShopProductsgg!")
         context.user_data.clear()
 
     elif data.startswith("del_product_"):
