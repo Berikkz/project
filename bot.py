@@ -10,6 +10,7 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+from flask import Flask, Response
 
 # Конфигурация
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
@@ -18,6 +19,14 @@ ORDERS_CHANNEL = "@ShopOrdersgg"
 PRODUCTS_FILE = "products.json"
 ADMINS_FILE = "admins.json"
 PHOTO, DESCRIPTION, PRICE, EMPLOYEE_ID, EMPLOYEE_ROLE, DELETE_PRODUCT, DELETE_EMPLOYEE = range(7)
+
+# Flask для обработки пинга
+app = Flask(__name__)
+
+# Роут для проверки аптайма (пинг от UptimeRobot)
+@app.route('/ping', methods=['GET'])
+def ping():
+    return Response("OK", status=200)
 
 # Валидация JSON
 def validate_products(products):
@@ -577,4 +586,6 @@ def main():
     application.run_webhook(listen="0.0.0.0", port=port, url_path="/webhook", webhook_url=webhook_url)
 
 if __name__ == "__main__":
+    port = int(os.getenv("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
     main()
