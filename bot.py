@@ -10,7 +10,6 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
-from flask import Flask, Response
 
 # Конфигурация
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
@@ -19,9 +18,6 @@ ORDERS_CHANNEL = "@ShopOrdersgg"
 PRODUCTS_FILE = "products.json"
 ADMINS_FILE = "admins.json"
 PHOTO, DESCRIPTION, PRICE, EMPLOYEE_ID, EMPLOYEE_ROLE, DELETE_PRODUCT, DELETE_EMPLOYEE = range(7)
-
-# Flask для обработки пинга
-app = Flask(__name__)
 
 # Валидация JSON
 def validate_products(products):
@@ -246,13 +242,13 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_photo(chat_id=user_id, photo=product["photo_id"], caption=text, parse_mode="HTML")
         else:
             await context.bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
-
+        
         # Генерация уникального ID заказа
         order_id = len(load_products()) + 1
         username = query.from_user.username or "неизвестен"
         order_text = f"Заказ #{order_id} | Товар: {product['name']} | Клиент: @{username} | Статус: Новый"
         order_message = await context.bot.send_message(chat_id=ORDERS_CHANNEL, text=order_text)
-
+        
         # Сохранение информации о заказе
         if "orders" not in context.bot_data:
             context.bot_data["orders"] = {}
@@ -263,7 +259,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "product_price": product['price'],
             "username": username
         }
-
+        
         admins = load_admins()
         for admin in admins:
             notify_text = f"Новый заказ #{order_id}: Товар: {product['name']}, Цена: {product['price']} руб., Клиент: @{username}"
@@ -286,14 +282,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not check_permission(user_id, "orders") and not check_permission(user_id, "all"):
             await query.message.reply_text("Нет прав для изменения статуса!")
             return
-
+        
         if "orders" in context.bot_data and order_id in context.bot_data["orders"]:
             order_info = context.bot_data["orders"][order_id]
             message_id = order_info["message_id"]
             buyer_id = order_info["buyer_id"]
             product_name = order_info["product_name"]
             username = order_info["username"]
-
+            
             order_text = f"Заказ #{order_id} | Товар: {product_name} | Клиент: @{username} | Статус: В обработке"
             try:
                 await context.bot.edit_message_text(
@@ -303,7 +299,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             except Exception as e:
                 print(f"Ошибка обновления сообщения: {e}")
-
+            
             # Уведомление клиента
             try:
                 await context.bot.send_message(
@@ -312,7 +308,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             except Exception as e:
                 print(f"Ошибка отправки уведомления клиенту: {e}")
-
+            
             await query.message.reply_text(f"Заказ #{order_id} взят в обработку!")
         else:
             await query.message.reply_text("Заказ не найден!")
@@ -322,14 +318,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not check_permission(user_id, "orders") and not check_permission(user_id, "all"):
             await query.message.reply_text("Нет прав для изменения статуса!")
             return
-
+        
         if "orders" in context.bot_data and order_id in context.bot_data["orders"]:
             order_info = context.bot_data["orders"][order_id]
             message_id = order_info["message_id"]
             buyer_id = order_info["buyer_id"]
             product_name = order_info["product_name"]
             username = order_info["username"]
-
+            
             order_text = f"Заказ #{order_id} | Товар: {product_name} | Клиент: @{username} | Статус: Продан"
             try:
                 await context.bot.edit_message_text(
@@ -339,7 +335,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             except Exception as e:
                 print(f"Ошибка обновления сообщения: {e}")
-
+            
             # Уведомление клиента
             try:
                 await context.bot.send_message(
@@ -348,7 +344,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             except Exception as e:
                 print(f"Ошибка отправки уведомления клиенту: {e}")
-
+            
             await query.message.reply_text(f"Заказ #{order_id} отмечен как продан!")
         else:
             await query.message.reply_text("Заказ не найден!")
@@ -514,13 +510,13 @@ async def add_employee_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
     employee_id = context.user_data["employee_id"]
     permissions = ["all"] if role == "admin" else ["orders"]
     admins = load_admins()
-
+    
     # Проверяем, не добавлен ли уже такой сотрудник
     for admin in admins:
         if admin["user_id"] == employee_id or str(admin["user_id"]) == str(employee_id):
             await query.message.reply_text("Этот сотрудник уже добавлен!")
             return ConversationHandler.END
-
+    
     admins.append({"user_id": employee_id, "role": role, "permissions": permissions})
     save_admins(admins)
     await send_json_files(query, context, query.from_user.id)
@@ -534,7 +530,7 @@ def main():
     # Настройка хендлеров
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("upload_json", upload_json))
-
+    
     # ConversationHandler для добавления товара
     product_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(button, pattern="^add_product$")],
@@ -580,7 +576,5 @@ def main():
     webhook_url = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/webhook" if os.getenv("RENDER_EXTERNAL_HOSTNAME") else "https://your-render-url.onrender.com/webhook"
     application.run_webhook(listen="0.0.0.0", port=port, url_path="/webhook", webhook_url=webhook_url)
 
-# Эндпоинт для проверки аптайма (пинг от UptimeRobot)
-@app.route('/ping', methods=['GET'])
-def ping():
-    return Response("OK", status=200)
+if __name__ == "__main__":
+    main()
