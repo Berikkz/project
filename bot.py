@@ -13,8 +13,8 @@ from telegram.ext import (
 
 # Конфигурация
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
-PRODUCTS_CHANNEL = "@ShopProducts"
-ORDERS_CHANNEL = "@ShopOrders"
+PRODUCTS_CHANNEL = "@ShopProductsgg"
+ORDERS_CHANNEL = "@ShopOrdersgg"
 PRODUCTS_FILE = "products.json"
 ADMINS_FILE = "admins.json"
 PHOTO, DESCRIPTION, PRICE, EMPLOYEE_ID, EMPLOYEE_ROLE, DELETE_PRODUCT, DELETE_EMPLOYEE = range(7)
