@@ -25,7 +25,6 @@ def run():
 def keep_alive():
     thread = threading.Thread(target=run)
     thread.start()
-
 # Конфигурация
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
 PRODUCTS_CHANNEL = "@ShopProductsgg"
