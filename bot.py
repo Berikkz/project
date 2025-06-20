@@ -210,7 +210,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         products = load_products()
         if not products:
             await query.message.reply_text("Товаров нет!")
-            return
+            return ConversationHandler.END
         keyboard = [[InlineKeyboardButton(p["name"], callback_data=f"del_product_{p['id']}")] for p in products]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.message.reply_text("Выберите товар для удаления:", reply_markup=reply_markup)
@@ -224,7 +224,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         admins = load_admins()
         if len(admins) <= 1:
             await query.message.reply_text("Нельзя удалить последнего админа!")
-            return
+            return ConversationHandler.END
         keyboard = [[InlineKeyboardButton(str(a["user_id"]), callback_data=f"del_employee_{a['user_id']}")] for a in admins]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.message.reply_text("Выберите сотрудника для удаления:", reply_markup=reply_markup)
@@ -242,18 +242,30 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_photo(chat_id=user_id, photo=product["photo_id"], caption=text, parse_mode="HTML")
         else:
             await context.bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
+        
+        # Генерация уникального ID заказа
         order_id = len(load_products()) + 1
-        order_text = f"Заказ #{order_id} | Товар: {product['name']} | Клиент: @{query.from_user.username} | Статус: Новый"
+        username = query.from_user.username or "неизвестен"
+        order_text = f"Заказ #{order_id} | Товар: {product['name']} | Клиент: @{username} | Статус: Новый"
         order_message = await context.bot.send_message(chat_id=ORDERS_CHANNEL, text=order_text)
-        context.user_data["order_message_id"] = order_message.message_id
-        context.user_data["order_id"] = order_id
-        context.user_data["buyer_id"] = query.from_user.id
+        
+        # Сохранение информации о заказе
+        if "orders" not in context.bot_data:
+            context.bot_data["orders"] = {}
+        context.bot_data["orders"][order_id] = {
+            "message_id": order_message.message_id,
+            "buyer_id": query.from_user.id,
+            "product_name": product['name'],
+            "product_price": product['price'],
+            "username": username
+        }
+        
         admins = load_admins()
         for admin in admins:
-            notify_text = f"Новый заказ #{order_id}: Товар: {product['name']}, Цена: {product['price']} руб., Клиент: @{query.from_user.username}"
+            notify_text = f"Новый заказ #{order_id}: Товар: {product['name']}, Цена: {product['price']} руб., Клиент: @{username}"
             keyboard = [
-                [InlineKeyboardButton("Взять в обработку", callback_data=f"status_processing_{order_id}_{order_message.message_id}")],
-                [InlineKeyboardButton("Отметить как продан", callback_data=f"status_sold_{order_id}_{order_message.message_id}")],
+                [InlineKeyboardButton("Взять в обработку", callback_data=f"status_processing_{order_id}")],
+                [InlineKeyboardButton("Отметить как продан", callback_data=f"status_sold_{order_id}")],
                 [InlineKeyboardButton("Связаться с клиентом", url=f"tg://user?id={query.from_user.id}")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -266,50 +278,76 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("Заказ оформлен! С вами свяжутся.")
 
     elif data.startswith("status_processing_"):
-        order_id, message_id = data.split("_")[2], data.split("_")[3]
-        if not check_permission(user_id, "orders"):
+        order_id = int(data.split("_")[2])
+        if not check_permission(user_id, "orders") and not check_permission(user_id, "all"):
             await query.message.reply_text("Нет прав для изменения статуса!")
             return
-        order_text = f"Заказ #{order_id} | Товар: {query.message.text.split('Товар: ')[1].split(',')[0]} | Клиент: {query.message.text.split('Клиент: ')[1].split(' |')[0]} | Статус: В обработке"
-        await context.bot.edit_message_text(
-            chat_id=ORDERS_CHANNEL,
-            message_id=int(message_id),
-            text=order_text
-        )
-        admins = load_admins()
-        for admin in admins:
-            await context.bot.send_message(
-                chat_id=admin["user_id"],
-                text=f"Заказ #{order_id} теперь в обработке (обновил @{query.from_user.username})"
-            )
-        await context.bot.send_message(
-            chat_id=context.user_data.get("buyer_id"),
-            text=f"Ваш заказ #{order_id} в обработке!"
-        )
-        await query.message.reply_text(f"Заказ #{order_id} взят в обработку!")
+        
+        if "orders" in context.bot_data and order_id in context.bot_data["orders"]:
+            order_info = context.bot_data["orders"][order_id]
+            message_id = order_info["message_id"]
+            buyer_id = order_info["buyer_id"]
+            product_name = order_info["product_name"]
+            username = order_info["username"]
+            
+            order_text = f"Заказ #{order_id} | Товар: {product_name} | Клиент: @{username} | Статус: В обработке"
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=ORDERS_CHANNEL,
+                    message_id=message_id,
+                    text=order_text
+                )
+            except Exception as e:
+                print(f"Ошибка обновления сообщения: {e}")
+            
+            # Уведомление клиента
+            try:
+                await context.bot.send_message(
+                    chat_id=buyer_id,
+                    text=f"Ваш заказ #{order_id} в обработке!"
+                )
+            except Exception as e:
+                print(f"Ошибка отправки уведомления клиенту: {e}")
+            
+            await query.message.reply_text(f"Заказ #{order_id} взят в обработку!")
+        else:
+            await query.message.reply_text("Заказ не найден!")
 
     elif data.startswith("status_sold_"):
-        order_id, message_id = data.split("_")[2], data.split("_")[3]
-        if not check_permission(user_id, "orders"):
+        order_id = int(data.split("_")[2])
+        if not check_permission(user_id, "orders") and not check_permission(user_id, "all"):
             await query.message.reply_text("Нет прав для изменения статуса!")
             return
-        order_text = f"Заказ #{order_id} | Товар: {query.message.text.split('Товар: ')[1].split(',')[0]} | Клиент: {query.message.text.split('Клиент: ')[1].split(' |')[0]} | Статус: Продан"
-        await context.bot.edit_message_text(
-            chat_id=ORDERS_CHANNEL,
-            message_id=int(message_id),
-            text=order_text
-        )
-        admins = load_admins()
-        for admin in admins:
-            await context.bot.send_message(
-                chat_id=admin["user_id"],
-                text=f"Заказ #{order_id} отмечен как продан (обновил @{query.from_user.username})"
-            )
-        await context.bot.send_message(
-            chat_id=context.user_data.get("buyer_id"),
-            text=f"Ваш заказ #{order_id} продан! Спасибо за покупку!"
-        )
-        await query.message.reply_text(f"Заказ #{order_id} отмечен как продан!")
+        
+        if "orders" in context.bot_data and order_id in context.bot_data["orders"]:
+            order_info = context.bot_data["orders"][order_id]
+            message_id = order_info["message_id"]
+            buyer_id = order_info["buyer_id"]
+            product_name = order_info["product_name"]
+            username = order_info["username"]
+            
+            order_text = f"Заказ #{order_id} | Товар: {product_name} | Клиент: @{username} | Статус: Продан"
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=ORDERS_CHANNEL,
+                    message_id=message_id,
+                    text=order_text
+                )
+            except Exception as e:
+                print(f"Ошибка обновления сообщения: {e}")
+            
+            # Уведомление клиента
+            try:
+                await context.bot.send_message(
+                    chat_id=buyer_id,
+                    text=f"Ваш заказ #{order_id} продан! Спасибо за покупку!"
+                )
+            except Exception as e:
+                print(f"Ошибка отправки уведомления клиенту: {e}")
+            
+            await query.message.reply_text(f"Заказ #{order_id} отмечен как продан!")
+        else:
+            await query.message.reply_text("Заказ не найден!")
 
     elif data.startswith("publish_"):
         product_id = data.split("_")[1]
@@ -349,26 +387,34 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         product = next((p for p in products if p["id"] == product_id), None)
         if not product:
             await query.message.reply_text("Товар не найден!")
-            return
+            return ConversationHandler.END
         try:
-            await context.bot.delete_message(chat_id=PRODUCTS_CHANNEL, message_id=product["message_id"])
-        except:
-            pass
+            if product.get("message_id"):
+                await context.bot.delete_message(chat_id=PRODUCTS_CHANNEL, message_id=product["message_id"])
+        except Exception as e:
+            print(f"Ошибка удаления сообщения: {e}")
         products = [p for p in products if p["id"] != product_id]
         save_products(products)
         await send_json_files(query, context, user_id)
         await query.message.reply_text(f"Товар {product['name']} удалён!")
+        return ConversationHandler.END
 
     elif data.startswith("del_employee_"):
         employee_id = data.split("_")[2]
         admins = load_admins()
         if len(admins) <= 1:
             await query.message.reply_text("Нельзя удалить последнего админа!")
-            return
-        admins = [a for a in admins if str(a["user_id"]) != employee_id]
+            return ConversationHandler.END
+        # Конвертируем в строку для корректного сравнения
+        try:
+            employee_id_int = int(employee_id)
+            admins = [a for a in admins if a["user_id"] != employee_id_int and str(a["user_id"]) != employee_id]
+        except ValueError:
+            admins = [a for a in admins if str(a["user_id"]) != employee_id]
         save_admins(admins)
         await send_json_files(query, context, user_id)
         await query.message.reply_text(f"Сотрудник {employee_id} удалён!")
+        return ConversationHandler.END
 
 # Обработчик добавления товара
 async def add_product_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -392,6 +438,7 @@ async def add_product_description(update: Update, context: ContextTypes.DEFAULT_
     return PRICE
 
 async def add_product_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
     try:
         price = float(update.message.text)
         context.user_data["price"] = price
@@ -463,6 +510,13 @@ async def add_employee_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
     employee_id = context.user_data["employee_id"]
     permissions = ["all"] if role == "admin" else ["orders"]
     admins = load_admins()
+    
+    # Проверяем, не добавлен ли уже такой сотрудник
+    for admin in admins:
+        if admin["user_id"] == employee_id or str(admin["user_id"]) == str(employee_id):
+            await query.message.reply_text("Этот сотрудник уже добавлен!")
+            return ConversationHandler.END
+    
     admins.append({"user_id": employee_id, "role": role, "permissions": permissions})
     save_admins(admins)
     await send_json_files(query, context, query.from_user.id)
@@ -476,9 +530,8 @@ def main():
     # Настройка хендлеров
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("upload_json", upload_json))
-    application.add_handler(CallbackQueryHandler(button, pattern="^(role_order|role_admin|add_product|delete_product|add_employee|remove_employee|order_|publish_|del_product_|del_employee_|status_processing_|status_sold_)"))
-    application.add_handler(CallbackQueryHandler(add_employee_role, pattern="^role_(admin|seller)_employee"))
-
+    
+    # ConversationHandler для добавления товара
     product_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(button, pattern="^add_product$")],
         states={
@@ -486,20 +539,22 @@ def main():
             DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_product_description)],
             PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_product_price)],
         },
-        fallbacks=[],
+        fallbacks=[CommandHandler("start", start)],
     )
     application.add_handler(product_conv)
 
+    # ConversationHandler для добавления сотрудника
     employee_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(button, pattern="^add_employee$")],
         states={
             EMPLOYEE_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_employee_id)],
-            EMPLOYEE_ROLE: [CallbackQueryHandler(add_employee_role)],
+            EMPLOYEE_ROLE: [CallbackQueryHandler(add_employee_role, pattern="^role_(admin|seller)_employee$")],
         },
-        fallbacks=[],
+        fallbacks=[CommandHandler("start", start)],
     )
     application.add_handler(employee_conv)
 
+    # ConversationHandler для удаления
     delete_conv = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(button, pattern="^delete_product$"),
@@ -509,9 +564,12 @@ def main():
             DELETE_PRODUCT: [CallbackQueryHandler(button, pattern="^del_product_")],
             DELETE_EMPLOYEE: [CallbackQueryHandler(button, pattern="^del_employee_")]
         },
-        fallbacks=[],
+        fallbacks=[CommandHandler("start", start)],
     )
     application.add_handler(delete_conv)
+
+    # Остальные CallbackQueryHandler
+    application.add_handler(CallbackQueryHandler(button))
 
     # Настройка вебхука
     port = int(os.getenv("PORT", 10000))
